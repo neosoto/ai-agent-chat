@@ -3,7 +3,8 @@
 
 const STORAGE_KEYS = {
   OPENAI: 'ai_agent_openai_api_key',
-  GEMINI: 'ai_agent_gemini_api_key'
+  GEMINI: 'ai_agent_gemini_api_key',
+  AGENT_SETTINGS: 'ai_agent_settings'
 };
 
 /**
@@ -122,4 +123,55 @@ export const validateApiKey = (key, type) => {
   }
   
   return false;
+};
+
+/**
+ * Agent 설정을 localStorage에 저장합니다.
+ * @param {object} settings - 저장할 설정 (topic, agentCount, agents)
+ * @returns {boolean} 저장 성공 여부
+ */
+export const saveAgentSettings = (settings) => {
+  try {
+    const settingsToSave = {
+      topic: settings.topic || '',
+      agentCount: settings.agentCount || 2,
+      agents: settings.agents || []
+    };
+    localStorage.setItem(STORAGE_KEYS.AGENT_SETTINGS, JSON.stringify(settingsToSave));
+    return true;
+  } catch (error) {
+    console.error('Agent 설정을 저장하는 중 오류:', error);
+    return false;
+  }
+};
+
+/**
+ * 저장된 Agent 설정을 localStorage에서 가져옵니다.
+ * @returns {object|null} 저장된 설정 또는 null
+ */
+export const loadAgentSettings = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.AGENT_SETTINGS);
+    if (!saved) {
+      return null;
+    }
+    return JSON.parse(saved);
+  } catch (error) {
+    console.error('Agent 설정을 불러오는 중 오류:', error);
+    return null;
+  }
+};
+
+/**
+ * 저장된 Agent 설정을 삭제합니다.
+ * @returns {boolean} 삭제 성공 여부
+ */
+export const clearAgentSettings = () => {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.AGENT_SETTINGS);
+    return true;
+  } catch (error) {
+    console.error('Agent 설정을 삭제하는 중 오류:', error);
+    return false;
+  }
 };

@@ -21,11 +21,12 @@ export const ConversationStatus = {
 
 // Agent 설정
 export class AgentConfig {
-  constructor(name, persona, type, apiKey) {
+  constructor(name, persona, type, apiKey, model = null) {
     this.name = name;
     this.persona = persona;
     this.type = type; // AgentType.GPT or AgentType.GEMINI
     this.apiKey = apiKey;
+    this.model = model; // 선택된 모델 이름 (예: "gpt-4", "gemini-pro")
   }
 }
 

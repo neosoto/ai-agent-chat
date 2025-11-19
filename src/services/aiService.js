@@ -7,6 +7,8 @@ class AIService {
   constructor() {
     this.openai = null;
     this.gemini = null;
+    this.geminiApiKey = null;
+    this.availableGeminiModels = null; // 캐시된 사용 가능한 모델 리스트
     this.initializeFromStorage();
   }
 
@@ -76,8 +78,59 @@ class AIService {
     
     console.log('Gemini API 키 초기화:', cleanApiKey.substring(0, 10) + '...');
     
+    // Gemini API 키 저장
+    this.geminiApiKey = cleanApiKey;
+    
     // Gemini API 키를 직접 전달하여 초기화
     this.gemini = new GoogleGenerativeAI(cleanApiKey);
+    
+    // 모델 리스트 캐시 초기화 (새로운 키로 변경되었으므로)
+    this.availableGeminiModels = null;
+  }
+
+  // Gemini 사용 가능한 모델 리스트 가져오기
+  async getAvailableGeminiModels() {
+    if (!this.geminiApiKey) {
+      throw new Error('Gemini API 키가 설정되지 않았습니다.');
+    }
+
+    // 캐시된 모델 리스트가 있으면 반환
+    if (this.availableGeminiModels) {
+      return this.availableGeminiModels;
+    }
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${this.geminiApiKey}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`모델 리스트 조회 실패: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // generateContent를 지원하는 모델만 필터링
+      const availableModels = (data.models || [])
+        .filter(model => {
+          // supportedGenerationMethods에 generateContent가 포함되어 있는지 확인
+          return model.supportedGenerationMethods?.includes('generateContent') || 
+                 model.supportedMethods?.includes('generateContent');
+        })
+        .map(model => model.name.replace('models/', '')) // "models/gemini-pro" -> "gemini-pro"
+        .sort(); // 알파벳 순으로 정렬
+
+      console.log('사용 가능한 Gemini 모델:', availableModels);
+      
+      // 캐시에 저장
+      this.availableGeminiModels = availableModels;
+      
+      return availableModels;
+    } catch (error) {
+      console.error('Gemini 모델 리스트 조회 오류:', error);
+      // 오류 발생 시 기본 모델 리스트 반환
+      return ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    }
   }
 
   // 진행 Agent (GPT)가 다음 발언자 선택
@@ -99,33 +152,35 @@ ${conversationHistory.map(msg => `${msg.agentName || '시스템'}: ${msg.content
 다음 발언자: [Agent 이름]`;
 
     try {
-      // GPT-5 API 사용
-      const response = await this.openai.responses.create({
-        model: "gpt-5",
-        input: systemPrompt
+      // OpenAI Chat Completions API 사용
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          { role: "system", content: systemPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 200
       });
 
-      // 응답 텍스트 추출 (새로운 응답 구조에 맞게 수정)
-      let responseText = '';
-      if (response.output && response.output.length > 0) {
-        const messageOutput = response.output.find(item => item.type === 'message');
-        if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
-          responseText = messageOutput.content[0].text;
-        }
-      }
+      // 응답 텍스트 추출
+      const responseText = response.choices[0]?.message?.content || '';
       
       console.log('다음 발언자 선택 응답:', responseText);
       const match = responseText.match(/다음 발언자:\s*(.+)/);
       
       if (match) {
         const selectedAgentName = match[1].trim();
-        return agents.find(agent => agent.name === selectedAgentName);
+        const foundAgent = agents.find(agent => agent.name === selectedAgentName);
+        if (foundAgent) {
+          return foundAgent;
+        }
       }
       
       // 매칭되지 않으면 첫 번째 Agent 반환
       return agents[0];
     } catch (error) {
       console.error('다음 발언자 선택 중 오류:', error);
+      // 오류 발생 시 첫 번째 Agent 반환
       return agents[0];
     }
   }
@@ -147,23 +202,24 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
 위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 응답해주세요.`;
 
     try {
-      // GPT-5 API 사용
-      const response = await this.openai.responses.create({
-        model: "gpt-5",
-        input: systemPrompt
+      // 선택된 모델 사용, 없으면 기본값 gpt-4
+      const modelName = agent.model || "gpt-4";
+      
+      // OpenAI Chat Completions API 사용
+      const response = await this.openai.chat.completions.create({
+        model: modelName,
+        messages: [
+          { role: "system", content: systemPrompt }
+        ],
+        temperature: 0.8,
+        max_tokens: 200
       });
 
-      // 응답 텍스트 추출 (새로운 응답 구조에 맞게 수정)
-      let responseText = '';
-      if (response.output && response.output.length > 0) {
-        const messageOutput = response.output.find(item => item.type === 'message');
-        if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
-          responseText = messageOutput.content[0].text;
-        }
-      }
+      // 응답 텍스트 추출
+      const responseText = response.choices[0]?.message?.content || '';
       
       console.log('GPT 응답 생성 결과:', responseText);
-      return responseText;
+      return responseText || '응답을 생성할 수 없습니다.';
     } catch (error) {
       console.error('GPT 응답 생성 중 오류:', error);
       throw error;
@@ -186,17 +242,55 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
 
 위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 응답해주세요.`;
 
-    try {
-      // Gemini-2.5 Pro API 사용
-      const model = this.gemini.getGenerativeModel({ model: "gemini-2.5-pro" });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      
-      return response.text();
-    } catch (error) {
-      console.error('Gemini 응답 생성 중 오류:', error);
-      throw error;
+    // 선택된 모델이 있으면 해당 모델 사용
+    if (agent.model) {
+      try {
+        const model = this.gemini.getGenerativeModel({ model: agent.model });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        
+        console.log(`Gemini 모델 ${agent.model} 사용 성공`);
+        return response.text();
+      } catch (error) {
+        console.warn(`선택된 Gemini 모델 ${agent.model} 실패:`, error.message);
+        // 선택된 모델이 실패하면 사용 가능한 모델로 폴백
+      }
     }
+
+    // 선택된 모델이 없거나 실패한 경우, 사용 가능한 모델 리스트 가져오기
+    const availableModels = await this.getAvailableGeminiModels();
+    
+    if (availableModels.length === 0) {
+      throw new Error('사용 가능한 Gemini 모델을 찾을 수 없습니다.');
+    }
+
+    let lastError = null;
+    
+    // 사용 가능한 모델들을 순서대로 시도
+    for (const modelName of availableModels) {
+      // 이미 시도한 모델은 건너뛰기
+      if (agent.model && modelName === agent.model) {
+        continue;
+      }
+      
+      try {
+        const model = this.gemini.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        
+        console.log(`Gemini 모델 ${modelName} 사용 성공 (폴백)`);
+        return response.text();
+      } catch (error) {
+        console.warn(`Gemini 모델 ${modelName} 실패:`, error.message);
+        lastError = error;
+        // 다음 모델 시도
+        continue;
+      }
+    }
+    
+    // 모든 모델이 실패한 경우
+    console.error('모든 Gemini 모델 시도 실패');
+    throw lastError || new Error('Gemini API 호출에 실패했습니다.');
   }
 
   // Agent 응답 생성 (타입에 따라 자동 선택)
@@ -239,13 +333,16 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
         dangerouslyAllowBrowser: true
       });
       
-      // GPT-5 API 테스트
-      const response = await testClient.responses.create({
-        model: "gpt-5",
-        input: "Hello"
+      // OpenAI Chat Completions API 테스트
+      const response = await testClient.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          { role: "user", content: "Hello" }
+        ],
+        max_tokens: 10
       });
       
-      return { success: true, message: "OpenAI GPT-5 API 키가 유효합니다." };
+      return { success: true, message: "OpenAI API 키가 유효합니다." };
     } catch (error) {
       console.error('API 키 테스트 오류:', error);
       let errorMessage = error.message;
@@ -283,12 +380,64 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
       // Gemini API 키를 직접 전달하여 테스트
       const testGemini = new GoogleGenerativeAI(cleanApiKey);
       
-      // Gemini-2.5 Pro API 테스트
-      const model = testGemini.getGenerativeModel({ model: "gemini-2.5-pro" });
-      const result = await model.generateContent("Hello");
-      const response = await result.response;
-      
-      return { success: true, message: "Gemini API 키가 유효합니다." };
+      // API로 사용 가능한 모델 리스트 가져오기
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanApiKey}`
+        );
+
+        if (!response.ok) {
+          throw new Error(`모델 리스트 조회 실패: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // generateContent를 지원하는 모델만 필터링
+        const availableModels = (data.models || [])
+          .filter(model => {
+            return model.supportedGenerationMethods?.includes('generateContent') || 
+                   model.supportedMethods?.includes('generateContent');
+          })
+          .map(model => model.name.replace('models/', ''));
+
+        if (availableModels.length === 0) {
+          throw new Error('사용 가능한 Gemini 모델을 찾을 수 없습니다.');
+        }
+
+        // 첫 번째 사용 가능한 모델로 테스트
+        const testModel = availableModels[0];
+        const model = testGemini.getGenerativeModel({ model: testModel });
+        const result = await model.generateContent("Hello");
+        await result.response;
+        
+        return { 
+          success: true, 
+          message: `Gemini API 키가 유효합니다. (사용 가능한 모델: ${availableModels.join(', ')})` 
+        };
+      } catch (error) {
+        // 모델 리스트 조회 실패 시 기본 모델로 테스트 시도
+        console.warn('모델 리스트 조회 실패, 기본 모델로 테스트:', error);
+        
+        const fallbackModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+        let lastError = null;
+        
+        for (const modelName of fallbackModels) {
+          try {
+            const model = testGemini.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent("Hello");
+            await result.response;
+            return { 
+              success: true, 
+              message: `Gemini API 키가 유효합니다. (모델: ${modelName})` 
+            };
+          } catch (testError) {
+            lastError = testError;
+            continue;
+          }
+        }
+        
+        throw lastError || error;
+      }
     } catch (error) {
       console.error('Gemini API 키 테스트 오류:', error);
       return { 

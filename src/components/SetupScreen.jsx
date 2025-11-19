@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AgentConfig, AgentType, ConversationConfig } from '../types/index.js';
 import aiService from '../services/aiService.js';
-import { getOpenAIKey, getGeminiKey, setOpenAIKey, setGeminiKey, hasStoredKeys, validateApiKey } from '../utils/apiKeyStorage.js';
+import { getOpenAIKey, getGeminiKey, setOpenAIKey, setGeminiKey, hasStoredKeys, validateApiKey, saveAgentSettings, loadAgentSettings } from '../utils/apiKeyStorage.js';
 import './SetupScreen.css';
 
 const SetupScreen = ({ onStart }) => {
@@ -12,8 +12,10 @@ const SetupScreen = ({ onStart }) => {
   const [keyTestResults, setKeyTestResults] = useState({ openai: null, gemini: null });
   const [apiKeys, setApiKeys] = useState({ openai: '', gemini: '' });
   const [keysLoaded, setKeysLoaded] = useState(false);
+  const [availableGeminiModels, setAvailableGeminiModels] = useState([]);
+  const [loadingGeminiModels, setLoadingGeminiModels] = useState(false);
 
-  // localStorage에서 API 키 로드
+  // localStorage에서 API 키 및 Agent 설정 로드
   useEffect(() => {
     const openaiKey = getOpenAIKey();
     const geminiKey = getGeminiKey();
@@ -34,11 +36,28 @@ const SetupScreen = ({ onStart }) => {
       }));
     }
     
+    // 저장된 Agent 설정 불러오기
+    const savedSettings = loadAgentSettings();
+    if (savedSettings) {
+      if (savedSettings.topic) {
+        setTopic(savedSettings.topic);
+      }
+      if (savedSettings.agentCount) {
+        setAgentCount(savedSettings.agentCount);
+      }
+      if (savedSettings.agents && savedSettings.agents.length > 0) {
+        setAgents(savedSettings.agents);
+      }
+    }
+    
     setKeysLoaded(true);
   }, []);
 
   // Agent 개수 변경 시 agents 배열 업데이트
   React.useEffect(() => {
+    // 저장된 설정이 로드되기 전에는 실행하지 않음
+    if (!keysLoaded) return;
+    
     const newAgents = [];
     for (let i = 0; i < agentCount; i++) {
       if (agents[i]) {
@@ -48,19 +67,78 @@ const SetupScreen = ({ onStart }) => {
           name: `Agent ${i + 1}`,
           persona: '',
           type: AgentType.GPT,
-          apiKey: ''
+          apiKey: '',
+          model: 'gpt-4' // 기본 모델
         });
       }
     }
     setAgents(newAgents);
-  }, [agentCount]);
+  }, [agentCount, keysLoaded]);
 
   // Agent 설정 업데이트
   const updateAgent = (index, field, value) => {
     const updatedAgents = [...agents];
     updatedAgents[index] = { ...updatedAgents[index], [field]: value };
+    
+    // 타입이 변경되면 기본 모델 설정
+    if (field === 'type') {
+      if (value === AgentType.GPT) {
+        updatedAgents[index].model = 'gpt-4';
+      } else if (value === AgentType.GEMINI) {
+        // Gemini 모델이 있으면 첫 번째 사용, 없으면 null
+        updatedAgents[index].model = availableGeminiModels.length > 0 
+          ? availableGeminiModels[0] 
+          : null;
+      }
+    }
+    
     setAgents(updatedAgents);
   };
+
+  // Gemini 사용 가능한 모델 리스트 가져오기
+  const loadGeminiModels = async () => {
+    const geminiKey = apiKeys.gemini;
+    if (!geminiKey || !validateApiKey(geminiKey, 'gemini')) {
+      setAvailableGeminiModels([]);
+      return;
+    }
+
+    setLoadingGeminiModels(true);
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey.trim()}`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const models = (data.models || [])
+          .filter(model => {
+            return model.supportedGenerationMethods?.includes('generateContent') || 
+                   model.supportedMethods?.includes('generateContent');
+          })
+          .map(model => model.name.replace('models/', ''))
+          .sort();
+        
+        setAvailableGeminiModels(models);
+        console.log('사용 가능한 Gemini 모델:', models);
+      } else {
+        console.warn('Gemini 모델 리스트 조회 실패');
+        setAvailableGeminiModels([]);
+      }
+    } catch (error) {
+      console.error('Gemini 모델 리스트 조회 오류:', error);
+      setAvailableGeminiModels([]);
+    } finally {
+      setLoadingGeminiModels(false);
+    }
+  };
+
+  // API 키가 변경되면 Gemini 모델 리스트 다시 로드
+  useEffect(() => {
+    if (keysLoaded && apiKeys.gemini) {
+      loadGeminiModels();
+    }
+  }, [apiKeys.gemini, keysLoaded]);
 
   // API 키 입력 핸들러
   const handleApiKeyChange = (type, value) => {
@@ -182,9 +260,16 @@ const SetupScreen = ({ onStart }) => {
       return;
     }
 
+    // Agent 설정 저장
+    saveAgentSettings({
+      topic,
+      agentCount,
+      agents
+    });
+
     // AgentConfig 객체 생성
     const agentConfigs = agents.map(agent => 
-      new AgentConfig(agent.name, agent.persona, agent.type, '')
+      new AgentConfig(agent.name, agent.persona, agent.type, '', agent.model || null)
     );
 
     // ConversationConfig 생성
@@ -340,7 +425,7 @@ const SetupScreen = ({ onStart }) => {
                   />
                 </div>
                 <div className="input-group">
-                  <label>AI 모델:</label>
+                  <label>AI 타입:</label>
                   <select
                     value={agent.type}
                     onChange={(e) => updateAgent(index, 'type', e.target.value)}
@@ -348,6 +433,35 @@ const SetupScreen = ({ onStart }) => {
                     <option value={AgentType.GPT}>GPT (OpenAI)</option>
                     <option value={AgentType.GEMINI}>Gemini (Google)</option>
                   </select>
+                </div>
+                <div className="input-group">
+                  <label>모델:</label>
+                  {agent.type === AgentType.GPT ? (
+                    <select
+                      value={agent.model || 'gpt-4'}
+                      onChange={(e) => updateAgent(index, 'model', e.target.value)}
+                    >
+                      <option value="gpt-4">GPT-4</option>
+                      <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                      <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={agent.model || ''}
+                      onChange={(e) => updateAgent(index, 'model', e.target.value)}
+                      disabled={loadingGeminiModels || availableGeminiModels.length === 0}
+                    >
+                      {loadingGeminiModels ? (
+                        <option value="">모델 로딩 중...</option>
+                      ) : availableGeminiModels.length === 0 ? (
+                        <option value="">사용 가능한 모델이 없습니다</option>
+                      ) : (
+                        availableGeminiModels.map(model => (
+                          <option key={model} value={model}>{model}</option>
+                        ))
+                      )}
+                    </select>
+                  )}
                 </div>
               </div>
             ))}

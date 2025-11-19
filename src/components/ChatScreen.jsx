@@ -139,7 +139,9 @@ const ChatScreen = ({
               )}
               <div className="message-text">{message.content}</div>
               <div className="message-time">
-                {message.timestamp.toLocaleTimeString()}
+                {message.timestamp instanceof Date 
+                  ? message.timestamp.toLocaleTimeString() 
+                  : new Date(message.timestamp).toLocaleTimeString()}
               </div>
             </div>
           </div>
