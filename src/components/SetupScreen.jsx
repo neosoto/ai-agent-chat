@@ -14,6 +14,8 @@ const SetupScreen = ({ onStart }) => {
   const [keysLoaded, setKeysLoaded] = useState(false);
   const [availableGeminiModels, setAvailableGeminiModels] = useState([]);
   const [loadingGeminiModels, setLoadingGeminiModels] = useState(false);
+  const [availableOpenAIModels, setAvailableOpenAIModels] = useState([]);
+  const [loadingOpenAIModels, setLoadingOpenAIModels] = useState(false);
 
   // localStorage에서 API 키 및 Agent 설정 로드
   useEffect(() => {
@@ -68,7 +70,7 @@ const SetupScreen = ({ onStart }) => {
           persona: '',
           type: AgentType.GPT,
           apiKey: '',
-          model: 'gpt-4' // 기본 모델
+          model: availableOpenAIModels.length > 0 ? availableOpenAIModels[0] : 'gpt-4' // 기본 모델
         });
       }
     }
@@ -83,7 +85,10 @@ const SetupScreen = ({ onStart }) => {
     // 타입이 변경되면 기본 모델 설정
     if (field === 'type') {
       if (value === AgentType.GPT) {
-        updatedAgents[index].model = 'gpt-4';
+        // OpenAI 모델이 있으면 첫 번째 사용, 없으면 기본값
+        updatedAgents[index].model = availableOpenAIModels.length > 0 
+          ? availableOpenAIModels[0] 
+          : 'gpt-4';
       } else if (value === AgentType.GEMINI) {
         // Gemini 모델이 있으면 첫 번째 사용, 없으면 null
         updatedAgents[index].model = availableGeminiModels.length > 0 
@@ -133,12 +138,78 @@ const SetupScreen = ({ onStart }) => {
     }
   };
 
-  // API 키가 변경되면 Gemini 모델 리스트 다시 로드
+  // OpenAI 사용 가능한 모델 리스트 가져오기
+  const loadOpenAIModels = async () => {
+    const openaiKey = apiKeys.openai;
+    if (!openaiKey || !validateApiKey(openaiKey, 'openai')) {
+      setAvailableOpenAIModels([]);
+      return;
+    }
+
+    setLoadingOpenAIModels(true);
+    try {
+      const response = await fetch('https://api.openai.com/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${openaiKey.trim()}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // 허용된 모델 목록만 필터링
+        const allowedModels = [
+          'gpt-5.1',
+          'gpt-5.1-mini',
+          'gpt-5.1-pro',
+          'gpt-4o',
+          'gpt-4o-mini',
+          'gpt-4o-realtime-preview',
+          'gpt-4.1',
+          'gpt-4.1-mini',
+          'gpt-4.1-preview',
+          'o1',
+          'o1-mini',
+          'o1-preview',
+          'o3-mini',
+          'chatgpt-4o-latest'
+        ];
+        
+        const models = (data.data || [])
+          .filter(model => allowedModels.includes(model.id))
+          .map(model => model.id)
+          .sort((a, b) => {
+            // 허용된 모델 순서대로 정렬
+            const indexA = allowedModels.indexOf(a);
+            const indexB = allowedModels.indexOf(b);
+            return indexA - indexB;
+          });
+        
+        setAvailableOpenAIModels(models);
+        console.log('사용 가능한 OpenAI 모델:', models);
+      } else {
+        console.warn('OpenAI 모델 리스트 조회 실패:', response.status);
+        setAvailableOpenAIModels([]);
+      }
+    } catch (error) {
+      console.error('OpenAI 모델 리스트 조회 오류:', error);
+      setAvailableOpenAIModels([]);
+    } finally {
+      setLoadingOpenAIModels(false);
+    }
+  };
+
+  // API 키가 변경되면 모델 리스트 다시 로드
   useEffect(() => {
     if (keysLoaded && apiKeys.gemini) {
       loadGeminiModels();
     }
   }, [apiKeys.gemini, keysLoaded]);
+
+  useEffect(() => {
+    if (keysLoaded && apiKeys.openai) {
+      loadOpenAIModels();
+    }
+  }, [apiKeys.openai, keysLoaded]);
 
   // API 키 입력 핸들러
   const handleApiKeyChange = (type, value) => {
@@ -438,12 +509,23 @@ const SetupScreen = ({ onStart }) => {
                   <label>모델:</label>
                   {agent.type === AgentType.GPT ? (
                     <select
-                      value={agent.model || 'gpt-4'}
+                      value={agent.model || ''}
                       onChange={(e) => updateAgent(index, 'model', e.target.value)}
+                      disabled={loadingOpenAIModels || availableOpenAIModels.length === 0}
                     >
-                      <option value="gpt-4">GPT-4</option>
-                      <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                      <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                      {loadingOpenAIModels ? (
+                        <option value="">모델 로딩 중...</option>
+                      ) : availableOpenAIModels.length === 0 ? (
+                        <>
+                          <option value="gpt-4">GPT-4 (기본)</option>
+                          <option value="gpt-3.5-turbo">GPT-3.5 Turbo (기본)</option>
+                          <option value="gpt-4-turbo">GPT-4 Turbo (기본)</option>
+                        </>
+                      ) : (
+                        availableOpenAIModels.map(model => (
+                          <option key={model} value={model}>{model}</option>
+                        ))
+                      )}
                     </select>
                   ) : (
                     <select

@@ -159,7 +159,7 @@ ${conversationHistory.map(msg => `${msg.agentName || '시스템'}: ${msg.content
           { role: "system", content: systemPrompt }
         ],
         temperature: 0.7,
-        max_tokens: 200
+        max_completion_tokens: 200
       });
 
       // 응답 텍스트 추출
@@ -201,10 +201,10 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
 
 위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 응답해주세요.`;
 
+    // 선택된 모델 사용, 없으면 기본값 gpt-4
+    const modelName = agent.model || "gpt-4";
+    
     try {
-      // 선택된 모델 사용, 없으면 기본값 gpt-4
-      const modelName = agent.model || "gpt-4";
-      
       // OpenAI Chat Completions API 사용
       const response = await this.openai.chat.completions.create({
         model: modelName,
@@ -212,16 +212,74 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
           { role: "system", content: systemPrompt }
         ],
         temperature: 0.8,
-        max_tokens: 200
+        max_completion_tokens: 500
       });
 
-      // 응답 텍스트 추출
-      const responseText = response.choices[0]?.message?.content || '';
+      // 응답 구조 확인 및 디버깅
+      console.log('API 응답 전체:', JSON.stringify(response, null, 2));
+      console.log('응답 choices:', response.choices);
       
-      console.log('GPT 응답 생성 결과:', responseText);
-      return responseText || '응답을 생성할 수 없습니다.';
+      // 응답 텍스트 추출
+      let responseText = '';
+      
+      if (response.choices && response.choices.length > 0) {
+        const firstChoice = response.choices[0];
+        console.log('첫 번째 choice:', firstChoice);
+        console.log('finish_reason:', firstChoice?.finish_reason);
+        
+        // 다양한 응답 구조 시도
+        if (firstChoice.message) {
+          responseText = firstChoice.message.content || 
+                        firstChoice.message.text ||
+                        '';
+        }
+        
+        // message가 없는 경우 다른 경로 시도
+        if (!responseText) {
+          responseText = firstChoice?.delta?.content || 
+                        firstChoice?.text ||
+                        firstChoice?.content ||
+                        '';
+        }
+      }
+      
+      console.log('추출된 응답 텍스트:', responseText);
+      console.log('응답 텍스트 길이:', responseText?.length || 0);
+      
+      // finish_reason이 length인 경우 응답이 잘렸지만 생성은 되었으므로 허용
+      const finishReason = response.choices?.[0]?.finish_reason;
+      if (finishReason === 'length') {
+        // 응답이 잘렸지만 내용이 있으면 반환 (정상적인 경우)
+        if (responseText && responseText.trim() !== '') {
+          console.log('응답이 토큰 제한으로 잘렸지만 내용은 정상적으로 생성되었습니다. (finish_reason: length)');
+          return responseText;
+        }
+        // 응답이 비어있으면 에러
+        throw new Error(`모델 "${modelName}"에서 응답이 토큰 제한으로 잘렸지만 내용을 추출할 수 없습니다.`);
+      }
+      
+      if (!responseText || (typeof responseText === 'string' && responseText.trim() === '')) {
+        console.error('응답이 비어있습니다.');
+        console.error('응답 구조:', JSON.stringify(response, null, 2));
+        console.error('모델:', modelName);
+        
+        // finish_reason이 있는 경우 추가 정보 제공
+        if (finishReason) {
+          throw new Error(`모델 "${modelName}"에서 응답을 받지 못했습니다. (finish_reason: ${finishReason})`);
+        }
+        
+        throw new Error(`모델 "${modelName}"에서 응답을 받지 못했습니다. 응답 구조를 확인해주세요.`);
+      }
+      
+      return responseText;
     } catch (error) {
       console.error('GPT 응답 생성 중 오류:', error);
+      
+      // 모델이 chat/completions를 지원하지 않는 경우
+      if (error.status === 404 && (error.message?.includes('chat/completions') || error.message?.includes('responses'))) {
+        throw new Error(`모델 "${modelName}"은 chat/completions를 지원하지 않습니다. 다른 모델을 선택해주세요.`);
+      }
+      
       throw error;
     }
   }
@@ -339,7 +397,7 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
         messages: [
           { role: "user", content: "Hello" }
         ],
-        max_tokens: 10
+        max_completion_tokens: 10
       });
       
       return { success: true, message: "OpenAI API 키가 유효합니다." };
@@ -412,7 +470,7 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
         
         return { 
           success: true, 
-          message: `Gemini API 키가 유효합니다. (사용 가능한 모델: ${availableModels.join(', ')})` 
+          message: `Gemini API 키가 유효합니다.` 
         };
       } catch (error) {
         // 모델 리스트 조회 실패 시 기본 모델로 테스트 시도
