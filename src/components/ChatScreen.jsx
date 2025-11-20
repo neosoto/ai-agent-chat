@@ -6,7 +6,8 @@ import './ChatScreen.css';
 const ChatScreen = ({ 
   messages, 
   status, 
-  isProcessing, 
+  isProcessing,
+  config,
   onUserMessage, 
   onCommand,
   onPause,
@@ -81,6 +82,13 @@ const ChatScreen = ({
     return colors[Math.abs(hash) % colors.length];
   };
 
+  // Agent 이름으로 모델 정보 가져오기
+  const getAgentModel = (agentName) => {
+    if (!config || !config.agents || !agentName) return null;
+    const agent = config.agents.find(a => a.name === agentName);
+    return agent?.model || null;
+  };
+
   // 상태에 따른 버튼 텍스트 반환
   const getStatusText = () => {
     switch (status) {
@@ -136,7 +144,12 @@ const ChatScreen = ({
             )}
             <div className="message-content">
               {message.type === MessageType.AGENT && (
-                <div className="agent-name">{message.agentName}</div>
+                <div className="agent-name">
+                  {message.agentName}
+                  {getAgentModel(message.agentName) && (
+                    <span className="agent-model"> ({getAgentModel(message.agentName)})</span>
+                  )}
+                </div>
               )}
               <div className="message-text">
                 <ReactMarkdown>{message.content}</ReactMarkdown>

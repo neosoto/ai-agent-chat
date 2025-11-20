@@ -160,6 +160,15 @@
   color: #333;
   margin-bottom: 5px;
   font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agent-model {
+  font-size: 0.85em;
+  color: #666;
+  font-weight: normal;
 }
 
 .user-message .agent-name {

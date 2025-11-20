@@ -71,6 +71,7 @@ function App() {
           messages={messages}
           status={status}
           isProcessing={isProcessing}
+          config={config}
           onUserMessage={handleUserMessage}
           onCommand={handleUserCommand}
           onPause={pauseConversation}
