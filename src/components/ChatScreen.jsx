@@ -103,6 +103,69 @@ const ChatScreen = ({
     }
   };
 
+  // 대화 내용을 txt 형식으로 변환
+  const exportToTxt = () => {
+    if (!messages || messages.length === 0) {
+      alert('다운로드할 대화 내용이 없습니다.');
+      return;
+    }
+
+    let txtContent = 'AI Agent 대화 기록\n';
+    txtContent += '='.repeat(50) + '\n\n';
+
+    // 주제 정보 추가
+    if (config && config.topic) {
+      txtContent += `주제: ${config.topic}\n\n`;
+    }
+
+    messages.forEach((message, index) => {
+      const timestamp = message.timestamp instanceof Date 
+        ? message.timestamp.toLocaleString('ko-KR')
+        : new Date(message.timestamp).toLocaleString('ko-KR');
+      
+      let sender = '';
+      switch (message.type) {
+        case MessageType.SYSTEM:
+          sender = '[시스템]';
+          break;
+        case MessageType.USER:
+          sender = '[사용자]';
+          break;
+        case MessageType.AGENT:
+          const model = getAgentModel(message.agentName);
+          sender = model 
+            ? `[${message.agentName} (${model})]`
+            : `[${message.agentName}]`;
+          break;
+        default:
+          sender = '[알 수 없음]';
+      }
+
+      txtContent += `${timestamp}\n`;
+      txtContent += `${sender}\n`;
+      txtContent += `${message.content}\n`;
+      txtContent += '-'.repeat(50) + '\n\n';
+    });
+
+    // 파일 다운로드
+    const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // 파일명 생성 (주제 또는 날짜 기반)
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const topicStr = config && config.topic 
+      ? config.topic.replace(/[^\w\s]/g, '').replace(/\s+/g, '_').substring(0, 20)
+      : '대화';
+    link.download = `ai-agent-chat_${topicStr}_${dateStr}.txt`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="chat-screen">
       {/* 헤더 */}
@@ -125,6 +188,9 @@ const ChatScreen = ({
             )}
             <button onClick={onStop} className="control-btn stop-btn">
               중단
+            </button>
+            <button onClick={exportToTxt} className="control-btn download-btn">
+              다운로드
             </button>
           </div>
         </div>
