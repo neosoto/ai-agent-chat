@@ -85,6 +85,18 @@
   min-height: 80px;
 }
 
+.system-prompt-input {
+  font-family: inherit;
+  line-height: 1.5em;
+}
+
+.input-hint {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 5px;
+  font-style: italic;
+}
+
 .input-with-button {
   display: flex;
   gap: 10px;
@@ -158,7 +170,7 @@
 
 .env-instructions li {
   margin-bottom: 8px;
-  line-height: 1.5;
+  line-height: 1.5em;
 }
 
 .env-example {
@@ -237,7 +249,7 @@
 .api-key-info p {
   margin: 0 0 15px 0;
   color: #495057;
-  line-height: 1.5;
+  line-height: 1.5em;
 }
 
 .security-notice {

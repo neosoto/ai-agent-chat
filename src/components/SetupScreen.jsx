@@ -8,6 +8,7 @@ const SetupScreen = ({ onStart }) => {
   const [topic, setTopic] = useState('');
   const [agentCount, setAgentCount] = useState(2);
   const [agents, setAgents] = useState([]);
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [testingKeys, setTestingKeys] = useState({ openai: false, gemini: false });
   const [keyTestResults, setKeyTestResults] = useState({ openai: null, gemini: null });
   const [apiKeys, setApiKeys] = useState({ openai: '', gemini: '' });
@@ -49,6 +50,9 @@ const SetupScreen = ({ onStart }) => {
       }
       if (savedSettings.agents && savedSettings.agents.length > 0) {
         setAgents(savedSettings.agents);
+      }
+      if (savedSettings.systemPrompt) {
+        setSystemPrompt(savedSettings.systemPrompt);
       }
     }
     
@@ -335,7 +339,8 @@ const SetupScreen = ({ onStart }) => {
     saveAgentSettings({
       topic,
       agentCount,
-      agents
+      agents,
+      systemPrompt
     });
 
     // AgentConfig 객체 생성
@@ -348,7 +353,8 @@ const SetupScreen = ({ onStart }) => {
       topic,
       agentConfigs,
       openai,
-      gemini
+      gemini,
+      systemPrompt || null
     );
 
     onStart(conversationConfig);
@@ -466,6 +472,22 @@ const SetupScreen = ({ onStart }) => {
                 onChange={(e) => setAgentCount(parseInt(e.target.value))}
                 required
               />
+            </div>
+            
+            {/* 공통 시스템 프롬프트 */}
+            <div className="input-group">
+              <label htmlFor="system-prompt">공통 시스템 프롬프트 (선택사항):</label>
+              <textarea
+                id="system-prompt"
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="모든 Agent에게 공통으로 적용될 시스템 프롬프트를 입력하세요. 예: '항상 존댓말을 사용하세요.', '답변은 간결하게 작성하세요.' 등"
+                rows="4"
+                className="system-prompt-input"
+              />
+              <div className="input-hint">
+                이 프롬프트는 각 Agent의 개별 프롬프트 앞에 추가됩니다.
+              </div>
             </div>
           </div>
 

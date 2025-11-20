@@ -186,12 +186,15 @@ ${conversationHistory.map(msg => `${msg.agentName || '시스템'}: ${msg.content
   }
 
   // GPT Agent 응답 생성
-  async generateGPTResponse(agent, conversationHistory, topic) {
+  async generateGPTResponse(agent, conversationHistory, topic, commonSystemPrompt = null) {
     if (!this.openai) {
       throw new Error('OpenAI API가 초기화되지 않았습니다.');
     }
 
-    const systemPrompt = `당신은 "${agent.name}"라는 AI Agent입니다.
+    // 공통 시스템 프롬프트가 있으면 앞에 추가
+    const commonPrompt = commonSystemPrompt ? `${commonSystemPrompt}\n\n` : '';
+    
+    const systemPrompt = `${commonPrompt}당신은 "${agent.name}"라는 AI Agent입니다.
 페르소나: ${agent.persona}
 
 현재 대화 주제: ${topic}
@@ -199,7 +202,7 @@ ${conversationHistory.map(msg => `${msg.agentName || '시스템'}: ${msg.content
 이전 대화 내용:
 ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content}`).join('\n')}
 
-위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 300자 이내로 응답해주세요.`;
+위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 500자 이내로 응답해주세요.`;
 
     // 선택된 모델 사용, 없으면 기본값 gpt-4
     const modelName = agent.model || "gpt-4";
@@ -285,12 +288,15 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
   }
 
   // Gemini Agent 응답 생성
-  async generateGeminiResponse(agent, conversationHistory, topic) {
+  async generateGeminiResponse(agent, conversationHistory, topic, commonSystemPrompt = null) {
     if (!this.gemini) {
       throw new Error('Gemini API가 초기화되지 않았습니다.');
     }
 
-    const prompt = `당신은 "${agent.name}"라는 AI Agent입니다.
+    // 공통 시스템 프롬프트가 있으면 앞에 추가
+    const commonPrompt = commonSystemPrompt ? `${commonSystemPrompt}\n\n` : '';
+
+    const prompt = `${commonPrompt}당신은 "${agent.name}"라는 AI Agent입니다.
 페르소나: ${agent.persona}
 
 현재 대화 주제: ${topic}
@@ -298,7 +304,7 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
 이전 대화 내용:
 ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content}`).join('\n')}
 
-위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 응답해주세요.`;
+위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 500자 이내로 응답해주세요.`;
 
     // 선택된 모델이 있으면 해당 모델 사용
     if (agent.model) {
@@ -352,11 +358,11 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
   }
 
   // Agent 응답 생성 (타입에 따라 자동 선택)
-  async generateAgentResponse(agent, conversationHistory, topic) {
+  async generateAgentResponse(agent, conversationHistory, topic, systemPrompt = null) {
     if (agent.type === AgentType.GPT) {
-      return await this.generateGPTResponse(agent, conversationHistory, topic);
+      return await this.generateGPTResponse(agent, conversationHistory, topic, systemPrompt);
     } else if (agent.type === AgentType.GEMINI) {
-      return await this.generateGeminiResponse(agent, conversationHistory, topic);
+      return await this.generateGeminiResponse(agent, conversationHistory, topic, systemPrompt);
     } else {
       throw new Error(`지원하지 않는 Agent 타입: ${agent.type}`);
     }

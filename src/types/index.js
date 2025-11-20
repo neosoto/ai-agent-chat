@@ -42,11 +42,12 @@ export class Message {
 
 // 대화 설정
 export class ConversationConfig {
-  constructor(topic, agents, openaiApiKey, geminiApiKey) {
+  constructor(topic, agents, openaiApiKey, geminiApiKey, systemPrompt = null) {
     this.topic = topic;
     this.agents = agents; // AgentConfig 배열
     this.openaiApiKey = openaiApiKey;
     this.geminiApiKey = geminiApiKey;
+    this.systemPrompt = systemPrompt; // 공통 시스템 프롬프트
   }
 }
 

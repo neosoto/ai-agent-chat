@@ -81,7 +81,8 @@ export const useConversation = () => {
       const response = await aiService.generateAgentResponse(
         nextAgent,
         messagesRef.current,
-        configRef.current.topic
+        configRef.current.topic,
+        configRef.current.systemPrompt
       );
 
       console.log('생성된 응답:', response.substring(0, 100) + '...');

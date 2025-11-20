@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageType, ConversationStatus } from '../types/index.js';
+import ReactMarkdown from 'react-markdown';
 import './ChatScreen.css';
 
 const ChatScreen = ({ 
@@ -137,7 +138,9 @@ const ChatScreen = ({
               {message.type === MessageType.AGENT && (
                 <div className="agent-name">{message.agentName}</div>
               )}
-              <div className="message-text">{message.content}</div>
+              <div className="message-text">
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+              </div>
               <div className="message-time">
                 {message.timestamp instanceof Date 
                   ? message.timestamp.toLocaleTimeString() 
