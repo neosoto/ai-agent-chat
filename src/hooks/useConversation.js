@@ -14,6 +14,10 @@ export const useConversation = () => {
   const messagesRef = useRef(messages);
   const configRef = useRef(config);
   const isProcessingRef = useRef(isProcessing);
+  
+  // Agent별 남은 대화 횟수 추적
+  const agentCountsRef = useRef({});
+  const initialCountsRef = useRef({});
 
   // ref 동기화 함수
   const updateRefs = useCallback(() => {
@@ -36,6 +40,22 @@ export const useConversation = () => {
     
     // API 클라이언트 초기화 (AIService의 setApiKeys 메서드 사용)
     aiService.setApiKeys(conversationConfig.openaiApiKey, conversationConfig.geminiApiKey);
+    
+    // Agent별 대화 카운트 초기화
+    const maxCount = conversationConfig.maxConversationCount;
+    if (maxCount && maxCount > 0) {
+      const counts = {};
+      const initialCounts = {};
+      conversationConfig.agents.forEach(agent => {
+        counts[agent.name] = maxCount;
+        initialCounts[agent.name] = maxCount;
+      });
+      agentCountsRef.current = counts;
+      initialCountsRef.current = initialCounts;
+    } else {
+      agentCountsRef.current = {};
+      initialCountsRef.current = {};
+    }
     
     // 첫 번째 시스템 메시지 추가
     const systemMessage = new Message(
@@ -76,6 +96,39 @@ export const useConversation = () => {
 
       console.log('선택된 Agent:', nextAgent.name);
 
+      // 대화 카운트 확인
+      const maxCount = configRef.current.maxConversationCount;
+      if (maxCount && maxCount > 0) {
+        const currentCount = agentCountsRef.current[nextAgent.name] || 0;
+        if (currentCount <= 0) {
+          console.log('Agent의 대화 횟수가 모두 소진되었습니다:', nextAgent.name);
+          // 모든 Agent의 카운트 확인
+          const allExhausted = Object.values(agentCountsRef.current).every(count => count <= 0);
+          if (allExhausted) {
+            console.log('모든 Agent의 대화 횟수가 소진되어 일시정지합니다.');
+            setStatus(ConversationStatus.PAUSED);
+            statusRef.current = ConversationStatus.PAUSED;
+            stopAutoConversation();
+            const pauseMessage = new Message(
+              MessageType.SYSTEM,
+              '모든 Agent의 대화 횟수가 소진되어 대화가 일시정지되었습니다. 재개 버튼을 눌러 카운트를 복구하세요.'
+            );
+            setMessages(prev => {
+              const newMessages = [...prev, pauseMessage];
+              messagesRef.current = newMessages;
+              return newMessages;
+            });
+            setIsProcessing(false);
+            isProcessingRef.current = false;
+            return;
+          }
+          // 이 Agent는 카운트가 없지만 다른 Agent는 있으므로 다음 Agent 선택 시도
+          setIsProcessing(false);
+          isProcessingRef.current = false;
+          return;
+        }
+      }
+
       // 선택된 Agent의 응답 생성
       console.log('Agent 응답 생성 중...');
       const response = await aiService.generateAgentResponse(
@@ -86,6 +139,12 @@ export const useConversation = () => {
       );
 
       console.log('생성된 응답:', response.substring(0, 100) + '...');
+
+      // 대화 카운트 감소
+      if (maxCount && maxCount > 0 && agentCountsRef.current[nextAgent.name] > 0) {
+        agentCountsRef.current[nextAgent.name]--;
+        console.log(`Agent ${nextAgent.name} 남은 대화 횟수: ${agentCountsRef.current[nextAgent.name]}`);
+      }
 
       // 새로운 메시지 추가 (함수형 업데이트 사용)
       const newMessage = new Message(
@@ -147,6 +206,27 @@ export const useConversation = () => {
   }, [stopAutoConversation]);
 
   const resumeConversation = useCallback(() => {
+    // 대화 카운트 복구
+    if (configRef.current && configRef.current.maxConversationCount) {
+      const maxCount = configRef.current.maxConversationCount;
+      const counts = {};
+      configRef.current.agents.forEach(agent => {
+        counts[agent.name] = maxCount;
+      });
+      agentCountsRef.current = counts;
+      console.log('대화 카운트가 복구되었습니다:', counts);
+      
+      const resumeMessage = new Message(
+        MessageType.SYSTEM,
+        `대화가 재개되었습니다. 모든 Agent의 대화 횟수가 ${maxCount}회로 복구되었습니다.`
+      );
+      setMessages(prev => {
+        const newMessages = [...prev, resumeMessage];
+        messagesRef.current = newMessages;
+        return newMessages;
+      });
+    }
+    
     setStatus(ConversationStatus.RUNNING);
     statusRef.current = ConversationStatus.RUNNING;
     startAutoConversation();

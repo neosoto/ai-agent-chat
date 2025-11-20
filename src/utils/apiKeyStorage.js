@@ -136,7 +136,8 @@ export const saveAgentSettings = (settings) => {
       topic: settings.topic || '',
       agentCount: settings.agentCount || 2,
       agents: settings.agents || [],
-      systemPrompt: settings.systemPrompt || ''
+      systemPrompt: settings.systemPrompt || '',
+      maxConversationCount: settings.maxConversationCount || null
     };
     localStorage.setItem(STORAGE_KEYS.AGENT_SETTINGS, JSON.stringify(settingsToSave));
     return true;

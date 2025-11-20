@@ -42,12 +42,13 @@ export class Message {
 
 // 대화 설정
 export class ConversationConfig {
-  constructor(topic, agents, openaiApiKey, geminiApiKey, systemPrompt = null) {
+  constructor(topic, agents, openaiApiKey, geminiApiKey, systemPrompt = null, maxConversationCount = null) {
     this.topic = topic;
     this.agents = agents; // AgentConfig 배열
     this.openaiApiKey = openaiApiKey;
     this.geminiApiKey = geminiApiKey;
     this.systemPrompt = systemPrompt; // 공통 시스템 프롬프트
+    this.maxConversationCount = maxConversationCount; // Agent당 최대 대화 횟수
   }
 }
 

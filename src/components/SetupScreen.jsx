@@ -9,6 +9,7 @@ const SetupScreen = ({ onStart }) => {
   const [agentCount, setAgentCount] = useState(2);
   const [agents, setAgents] = useState([]);
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [maxConversationCount, setMaxConversationCount] = useState('');
   const [testingKeys, setTestingKeys] = useState({ openai: false, gemini: false });
   const [keyTestResults, setKeyTestResults] = useState({ openai: null, gemini: null });
   const [apiKeys, setApiKeys] = useState({ openai: '', gemini: '' });
@@ -53,6 +54,9 @@ const SetupScreen = ({ onStart }) => {
       }
       if (savedSettings.systemPrompt) {
         setSystemPrompt(savedSettings.systemPrompt);
+      }
+      if (savedSettings.maxConversationCount) {
+        setMaxConversationCount(savedSettings.maxConversationCount.toString());
       }
     }
     
@@ -340,7 +344,8 @@ const SetupScreen = ({ onStart }) => {
       topic,
       agentCount,
       agents,
-      systemPrompt
+      systemPrompt,
+      maxConversationCount: maxConversationCount ? parseInt(maxConversationCount) : null
     });
 
     // AgentConfig 객체 생성
@@ -354,7 +359,8 @@ const SetupScreen = ({ onStart }) => {
       agentConfigs,
       openai,
       gemini,
-      systemPrompt || null
+      systemPrompt || null,
+      maxConversationCount ? parseInt(maxConversationCount) : null
     );
 
     onStart(conversationConfig);
@@ -487,6 +493,22 @@ const SetupScreen = ({ onStart }) => {
               />
               <div className="input-hint">
                 이 프롬프트는 각 Agent의 개별 프롬프트 앞에 추가됩니다.
+              </div>
+            </div>
+            
+            {/* 대화 카운트 설정 */}
+            <div className="input-group">
+              <label htmlFor="max-conversation-count">Agent당 최대 대화 횟수 (선택사항):</label>
+              <input
+                type="number"
+                id="max-conversation-count"
+                min="1"
+                value={maxConversationCount}
+                onChange={(e) => setMaxConversationCount(e.target.value)}
+                placeholder="예: 10 (비워두면 무제한)"
+              />
+              <div className="input-hint">
+                각 Agent가 대화할 수 있는 최대 횟수를 설정합니다. 모든 Agent의 횟수가 소진되면 자동으로 일시정지됩니다. 재개 시 카운트가 복구됩니다.
               </div>
             </div>
           </div>
