@@ -212,7 +212,7 @@ ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content
           { role: "system", content: systemPrompt }
         ],
         temperature: 0.8,
-        max_completion_tokens: 500
+        max_completion_tokens: 600
       });
 
       // 응답 구조 확인 및 디버깅
