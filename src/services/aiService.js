@@ -199,7 +199,7 @@ ${conversationHistory.map(msg => `${msg.agentName || '시스템'}: ${msg.content
 이전 대화 내용:
 ${conversationHistory.map(msg => `${msg.agentName || '사용자'}: ${msg.content}`).join('\n')}
 
-위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 응답해주세요.`;
+위의 대화 맥락을 고려하여 주제에 대해 당신의 페르소나에 맞게 300자 이내로 응답해주세요.`;
 
     // 선택된 모델 사용, 없으면 기본값 gpt-4
     const modelName = agent.model || "gpt-4";
